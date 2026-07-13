@@ -17,9 +17,9 @@ public class CorsConfig {
         CorsConfiguration configuration = new CorsConfiguration();
 
         // Allowed Frontend URLs
-        configuration.setAllowedOrigins(List.of(
+        configuration.setAllowedOriginPatterns(List.of(
                 "http://localhost:3000",
-                "https://login-authentication-system-three.vercel.app"
+                "https://*.vercel.app"
         ));
 
         // Allowed HTTP Methods
@@ -34,7 +34,10 @@ public class CorsConfig {
         // Allowed Headers
         configuration.setAllowedHeaders(List.of("*"));
 
-        // Allow Cookies / Authorization Header
+        // Exposed Headers (Optional but good practice)
+        configuration.setExposedHeaders(List.of("Authorization"));
+
+        // Allow JWT Authorization Header
         configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source =
