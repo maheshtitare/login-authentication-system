@@ -1,91 +1,159 @@
+import { FaEye, FaEyeSlash } from "react-icons/fa";
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { loginUser } from "../services/authService";
 import "../App.css";
 
 function Login() {
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+    const navigate = useNavigate();
 
-  const handleLogin = async (e) => {
+    const [email, setEmail] = useState("");
+    const [password, setPassword] = useState("");
+    const [showPassword, setShowPassword] = useState(false);
+    const [message, setMessage] = useState(null);
+    const [loading, setLoading] = useState(false);
 
-    e.preventDefault();
+    const handleLogin = async (e) => {
 
-    try {
+        e.preventDefault();
 
-      const response = await loginUser({
-        email,
-        password
-      });
+        setMessage(null);
+        setLoading(true);
 
-      alert(response.data);
+        try {
 
-    } catch (error) {
+            const response = await loginUser({
+                email,
+                password
+            });
 
-      if (error.response) {
-        alert(error.response.data);
-      } else {
-        alert("Server Error");
-      }
+            const token = response.data;
 
-    }
+            localStorage.setItem("token", token);
+            localStorage.setItem("email", email);
 
-  };
+            setMessage({
+                type: "success",
+                text: "Login Successful. Redirecting..."
+            });
 
-  return (
-    <div className="container">
+            setTimeout(() => {
+                navigate("/dashboard");
+            }, 800);
 
-      <div className="card">
+        } catch (error) {
 
-        <h2>Login</h2>
+            if (error.response) {
+                setMessage({
+                    type: "error",
+                    text: error.response.data
+                });
+            } else {
+                setMessage({
+                    type: "error",
+                    text: "Server Error"
+                });
+            }
 
-        <form onSubmit={handleLogin}>
+        } finally {
+            setLoading(false);
+        }
 
-          <div className="input-group">
-            <label>Email</label>
-            <input
-              type="email"
-              placeholder="Enter Email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-          </div>
+    };
 
-          <div className="input-group">
-            <label>Password</label>
-            <input
-              type="password"
-              placeholder="Enter Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </div>
+    return (
 
-          <button type="submit" className="btn">
-            Login
-          </button>
+        <div className="container">
 
-        </form>
+            <div className="auth-wrapper">
 
-        <div className="links">
+                <div className="auth-form">
 
-          <Link to="/forgot-password">
-            Forgot Password?
-          </Link>
+                    <h2>Login</h2>
 
-          <Link to="/register">
-            Create Account
-          </Link>
+                    <p className="subtitle">
+                        Sign in to your account
+                    </p>
+
+                    {message && (
+                        <div className={`message ${message.type}`}>
+                            {message.text}
+                        </div>
+                    )}
+
+                    <form onSubmit={handleLogin}>
+
+                        <div className="input-group">
+
+                            <label>Email</label>
+
+                            <input
+                                type="email"
+                                placeholder="Enter Email"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                required
+                            />
+
+                        </div>
+
+                        <div className="input-group">
+
+                            <label>Password</label>
+
+                            <div className="password-field">
+
+                                <input
+                                    type={showPassword ? "text" : "password"}
+                                    placeholder="Enter Password"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    required
+                                />
+
+                                <button
+                                    type="button"
+                                    className="password-toggle"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                >
+                                    {showPassword ? <FaEyeSlash /> : <FaEye />}
+                                </button>
+
+                            </div>
+
+                        </div>
+
+                        <button
+                            type="submit"
+                            className="btn"
+                            disabled={loading}
+                        >
+                            {loading ? "Signing in..." : "Login"}
+                        </button>
+
+                    </form>
+
+                    <div className="links">
+
+                        <Link to="/forgot-password">
+                            Forgot Password?
+                        </Link>
+
+                        <Link to="/register">
+                            Create Account
+                        </Link>
+
+                    </div>
+
+                </div>
+
+            </div>
 
         </div>
 
-      </div>
+    );
 
-    </div>
-  );
 }
 
 export default Login;

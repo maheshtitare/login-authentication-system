@@ -1,6 +1,9 @@
 package com.mahesh.login_auth_api.service;
 
+import java.time.LocalDateTime;
+
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import com.mahesh.login_auth_api.dto.ForgotPasswordRequest;
@@ -11,6 +14,7 @@ import com.mahesh.login_auth_api.dto.ResetPasswordRequest;
 import com.mahesh.login_auth_api.entity.User;
 import com.mahesh.login_auth_api.repository.UserRepository;
 import com.mahesh.login_auth_api.util.OtpGenerator;
+import com.mahesh.login_auth_api.exception.InvalidCredentialsException;
 import com.mahesh.login_auth_api.exception.ResourceNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import com.mahesh.login_auth_api.util.JwtUtil;
@@ -22,10 +26,23 @@ public class AuthService {
     private UserRepository userRepository;
 
     @Autowired
-private PasswordEncoder passwordEncoder;
+    private PasswordEncoder passwordEncoder;
 
-@Autowired
-private JwtUtil jwtUtil;
+    @Autowired
+    private JwtUtil jwtUtil;
+
+    @Autowired
+    private EmailService emailService;
+
+    @Value("${app.otp.expiry-minutes}")
+    private int otpExpiryMinutes;
+
+    @Value("${app.otp.print-console}")
+    private boolean otpPrintConsole;
+
+    // Stricter email pattern (requires a proper TLD)
+    private static final String EMAIL_REGEX =
+            "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$";
 
     // ================= REGISTER =================
 
@@ -42,7 +59,7 @@ private JwtUtil jwtUtil;
         }
 
         // Email Format Validation
-        if (!request.getEmail().matches("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$")) {
+        if (!request.getEmail().matches(EMAIL_REGEX)) {
             return "Invalid Email Format";
         }
 
@@ -51,14 +68,26 @@ private JwtUtil jwtUtil;
             return "Phone Number is required";
         }
 
+        // Phone Number Format (10 digits)
+        if (!request.getPhoneNumber().matches("^[0-9]{10}$")) {
+            return "Phone Number must be 10 digits";
+        }
+
         // Empty Password Check
         if (request.getPassword() == null || request.getPassword().trim().isEmpty()) {
             return "Password is required";
         }
 
-        // Password Length Validation
-        if (request.getPassword().length() < 6) {
-            return "Password must be at least 6 characters";
+        // Password Strength Validation
+        String passwordError = validatePasswordStrength(request.getPassword());
+        if (passwordError != null) {
+            return passwordError;
+        }
+
+        // Confirm Password Check
+        if (request.getConfirmPassword() == null
+                || !request.getConfirmPassword().equals(request.getPassword())) {
+            return "Passwords do not match";
         }
 
         // Duplicate Email Check
@@ -85,22 +114,31 @@ private JwtUtil jwtUtil;
 
     // ================= LOGIN =================
 
-  public String loginUser(LoginRequest request) {
+    public String loginUser(LoginRequest request) {
 
-    User user = userRepository.findByEmail(request.getEmail()).orElse(null);
+        if (request.getEmail() == null || request.getEmail().trim().isEmpty()) {
+            throw new InvalidCredentialsException("Email is required");
+        }
 
-    if (user == null) {
-        throw new ResourceNotFoundException("User not found");
+        if (request.getPassword() == null || request.getPassword().trim().isEmpty()) {
+            throw new InvalidCredentialsException("Password is required");
+        }
+
+        User user = userRepository.findByEmail(request.getEmail()).orElse(null);
+
+        if (user == null) {
+            throw new ResourceNotFoundException("User not found");
+        }
+
+        if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+            throw new InvalidCredentialsException("Invalid Password");
+        }
+
+        String token = jwtUtil.generateToken(user.getEmail());
+
+        return token;
     }
 
- if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
-    return "Invalid Password";
-}
-
-    String token = jwtUtil.generateToken(user.getEmail());
-
-return token;
-}
     // ================= FORGOT PASSWORD =================
 
     public String forgotPassword(ForgotPasswordRequest request) {
@@ -108,6 +146,10 @@ return token;
         User user = null;
 
         String username = request.getUsername();
+
+        if (username == null || username.trim().isEmpty()) {
+            return "Email or Phone Number is required";
+        }
 
         // Check Email
         if (username.contains("@")) {
@@ -118,19 +160,31 @@ return token;
             user = userRepository.findByPhoneNumber(username).orElse(null);
         }
 
-       if (user == null) {
-    throw new ResourceNotFoundException("User not found");
-}
+        if (user == null) {
+            throw new ResourceNotFoundException("User not found");
+        }
 
         String otp = OtpGenerator.generateOtp();
 
         user.setOtp(otp);
+        user.setOtpExpiry(LocalDateTime.now().plusMinutes(otpExpiryMinutes));
+        user.setVerified(false);
 
         userRepository.save(user);
 
-        System.out.println("Generated OTP : " + otp);
+        // Send OTP by email (always dispatched to the user's registered email)
+        emailService.sendOtpEmail(
+                user.getEmail(),
+                user.getFullName(),
+                otp,
+                otpExpiryMinutes
+        );
 
-        return "OTP Generated Successfully";
+        if (otpPrintConsole) {
+            System.out.println("Generated OTP : " + otp);
+        }
+
+        return "OTP Sent to Registered Email";
     }
 
     // ================= VERIFY OTP =================
@@ -142,21 +196,33 @@ return token;
         String username = request.getUsername();
 
         // Check Email
-        if (username.contains("@")) {
+        if (username != null && username.contains("@")) {
             user = userRepository.findByEmail(username).orElse(null);
         }
         // Check Phone Number
-        else {
+        else if (username != null) {
             user = userRepository.findByPhoneNumber(username).orElse(null);
         }
 
-       if (user == null) {
-    throw new ResourceNotFoundException("User not found");
-}
+        if (user == null) {
+            throw new ResourceNotFoundException("User not found");
+        }
 
-       if (user.getOtp() == null) {
-    throw new ResourceNotFoundException("OTP not generated");
-}
+        if (user.getOtp() == null) {
+            throw new ResourceNotFoundException("OTP not generated");
+        }
+
+        // OTP Expiry Check
+        if (user.getOtpExpiry() == null
+                || LocalDateTime.now().isAfter(user.getOtpExpiry())) {
+
+            // Clear the expired OTP so it cannot be reused
+            user.setOtp(null);
+            user.setOtpExpiry(null);
+            userRepository.save(user);
+
+            return "OTP has expired. Please request a new one";
+        }
 
         if (!user.getOtp().equals(request.getOtp())) {
             return "Invalid OTP";
@@ -179,45 +245,69 @@ return token;
         String username = request.getUsername();
 
         // Check Email
-        if (username.contains("@")) {
+        if (username != null && username.contains("@")) {
             user = userRepository.findByEmail(username).orElse(null);
         }
         // Check Phone Number
-        else {
+        else if (username != null) {
             user = userRepository.findByPhoneNumber(username).orElse(null);
         }
 
-      if (user == null) {
-    throw new ResourceNotFoundException("User not found");
-}
+        if (user == null) {
+            throw new ResourceNotFoundException("User not found");
+        }
 
         // Check OTP Verification
-         if (!user.getVerified()) {
-         return "Please verify OTP first";
-}
+        if (user.getVerified() == null || !user.getVerified()) {
+            return "Please verify OTP first";
+        }
 
         // Empty Password Check
         if (request.getNewPassword() == null || request.getNewPassword().trim().isEmpty()) {
             return "New Password is required";
         }
 
-        // Password Length Validation
-        if (request.getNewPassword().length() < 6) {
-            return "Password must be at least 6 characters";
+        // Password Strength Validation
+        String passwordError = validatePasswordStrength(request.getNewPassword());
+        if (passwordError != null) {
+            return passwordError;
+        }
+
+        // Confirm Password Check
+        if (request.getConfirmPassword() == null
+                || !request.getConfirmPassword().equals(request.getNewPassword())) {
+            return "Passwords do not match";
         }
 
         // Update Password
-    user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
 
-        // Clear OTP
+        // Clear OTP + verification state
         user.setOtp(null);
-
-        // Reset Verification Status
+        user.setOtpExpiry(null);
         user.setVerified(false);
 
         userRepository.save(user);
 
         return "Password Reset Successfully";
+    }
+
+    // ================= PASSWORD STRENGTH HELPER =================
+
+    private String validatePasswordStrength(String password) {
+
+        if (password.length() < 6) {
+            return "Password must be at least 6 characters";
+        }
+
+        boolean hasLetter = password.matches(".*[A-Za-z].*");
+        boolean hasDigit = password.matches(".*[0-9].*");
+
+        if (!hasLetter || !hasDigit) {
+            return "Password must contain both letters and numbers";
+        }
+
+        return null;
     }
 
 }
