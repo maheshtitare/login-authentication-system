@@ -1,23 +1,23 @@
 import axios from "axios";
 
-const BASE_URL = "http://localhost:8080/api/auth";
+const API_URL = "https://login-auth-api-i8w6.onrender.com/api/auth";
 
 export const registerUser = (user) => {
-    return axios.post(`${BASE_URL}/register`, user);
+    return axios.post(`${API_URL}/register`, user);
 };
 
 export const loginUser = (user) => {
-    return axios.post(`${BASE_URL}/login`, user);
+    return axios.post(`${API_URL}/login`, user);
 };
 
 export const forgotPassword = (data) => {
-    return axios.post(`${BASE_URL}/forgot-password`, data);
+    return axios.post(`${API_URL}/forgot-password`, data);
 };
 
 export const verifyOtp = (data) => {
-    return axios.post(`${BASE_URL}/verify-otp`, data);
+    return axios.post(`${API_URL}/verify-otp`, data);
 };
 
 export const resetPassword = (data) => {
-    return axios.post(`${BASE_URL}/reset-password`, data);
+    return axios.post(`${API_URL}/reset-password`, data);
 };
