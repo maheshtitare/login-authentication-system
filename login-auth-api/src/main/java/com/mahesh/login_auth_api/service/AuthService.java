@@ -173,6 +173,18 @@ public class AuthService {
         userRepository.save(user);
 
         // Send OTP by email (always dispatched to the user's registered email)
+
+        System.out.println("===== BEFORE EMAIL SERVICE =====");
+
+emailService.sendOtpEmail(
+        user.getEmail(),
+        user.getFullName(),
+        otp,
+        otpExpiryMinutes
+);
+
+System.out.println("===== AFTER EMAIL SERVICE =====");
+
         emailService.sendOtpEmail(
                 user.getEmail(),
                 user.getFullName(),
