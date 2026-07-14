@@ -1,3 +1,4 @@
+import { FaEye, FaEyeSlash } from "react-icons/fa";
 import { useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { resetPassword } from "../services/authService";
@@ -12,6 +13,7 @@ function ResetPassword() {
 
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
@@ -25,7 +27,10 @@ function ResetPassword() {
     setMessage(null);
 
     if (newPassword !== confirmPassword) {
-      setMessage({ type: "error", text: "Passwords do not match" });
+      setMessage({
+        type: "error",
+        text: "Passwords do not match"
+      });
       return;
     }
 
@@ -39,21 +44,38 @@ function ResetPassword() {
         confirmPassword
       });
 
-      const text = response.data;
+      if (response.data === "Password Reset Successfully") {
 
-      if (text === "Password Reset Successfully") {
-        setMessage({ type: "success", text: text + ". Redirecting to Login..." });
-        setTimeout(() => navigate("/"), 1200);
+        setMessage({
+          type: "success",
+          text: "Password Reset Successfully. Redirecting to Login..."
+        });
+
+        setTimeout(() => {
+          navigate("/");
+        }, 1200);
+
       } else {
-        setMessage({ type: "error", text });
+
+        setMessage({
+          type: "error",
+          text: response.data
+        });
+
       }
 
     } catch (error) {
 
       if (error.response) {
-        setMessage({ type: "error", text: error.response.data });
+        setMessage({
+          type: "error",
+          text: error.response.data
+        });
       } else {
-        setMessage({ type: "error", text: "Server Error" });
+        setMessage({
+          type: "error",
+          text: "Server Error"
+        });
       }
 
     } finally {
@@ -68,82 +90,88 @@ function ResetPassword() {
 
       <div className="auth-wrapper">
 
-        <div className="auth-brand">
-          <div className="brand-logo">🔐 Mahesh Auth</div>
-          <div className="brand-content">
-            <h1>Set a new password</h1>
-            <p>
-              Choose a strong password with at least 6 characters, using both
-              letters and numbers.
-            </p>
-            <ul className="brand-features">
-              <li>BCrypt hashed on the server</li>
-              <li>OTP session cleared after reset</li>
-              <li>Immediate login with new password</li>
-            </ul>
-          </div>
-          <div style={{ fontSize: 12, opacity: 0.7, position: "relative", zIndex: 1 }}>
-            © {new Date().getFullYear()} Mahesh Titare
-          </div>
-        </div>
-
         <div className="auth-form">
 
           <h2>Reset Password</h2>
-          <p className="subtitle">Create a new password for your account</p>
+
+          <p className="subtitle">
+            Create a new password for your account
+          </p>
 
           {message && (
-            <div className={`message ${message.type}`}>{message.text}</div>
+            <div className={`message ${message.type}`}>
+              {message.text}
+            </div>
           )}
 
           <form onSubmit={handleResetPassword}>
 
             <div className="input-group">
               <label>Email / Phone Number</label>
-              <input type="text" value={username} readOnly />
+              <input
+                type="text"
+                value={username}
+                readOnly
+              />
             </div>
 
             <div className="input-group">
+
               <label>New Password</label>
+
               <div className="password-field">
+
                 <input
                   type={showNew ? "text" : "password"}
-                  placeholder="Min 6 chars, letters + numbers"
+                  placeholder="Enter New Password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   required
                 />
-                <button
-                  type="button"
-                  className="password-toggle"
-                  onClick={() => setShowNew(!showNew)}
-                >
-                  {showNew ? "🙈" : "👁️"}
-                </button>
+
+               <button
+  type="button"
+  className="password-toggle"
+  onClick={() => setShowNew(!showNew)}
+>
+  {showNew ? <FaEyeSlash /> : <FaEye />}
+</button>
+
               </div>
+
             </div>
 
             <div className="input-group">
+
               <label>Confirm New Password</label>
+
               <div className="password-field">
+
                 <input
                   type={showConfirm ? "text" : "password"}
-                  placeholder="Re-enter New Password"
+                  placeholder="Confirm New Password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
                 />
-                <button
-                  type="button"
-                  className="password-toggle"
-                  onClick={() => setShowConfirm(!showConfirm)}
-                >
-                  {showConfirm ? "🙈" : "👁️"}
-                </button>
+
+               <button
+  type="button"
+  className="password-toggle"
+  onClick={() => setShowConfirm(!showConfirm)}
+>
+  {showConfirm ? <FaEyeSlash /> : <FaEye />}
+</button>
+
               </div>
+
             </div>
 
-            <button type="submit" className="btn" disabled={loading}>
+            <button
+              type="submit"
+              className="btn"
+              disabled={loading}
+            >
               {loading ? "Resetting..." : "Reset Password"}
             </button>
 
